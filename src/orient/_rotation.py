@@ -1,86 +1,61 @@
-"""Lossless rotation via exiftool or jpegtran."""
+"""Image rotation — pure Python, no external tools required.
+
+Methods:
+  "exif"      — Set EXIF Orientation tag via piexif (metadata only, truly lossless)
+  "transpose" — Rotate pixels via Pillow transpose (re-encodes JPEG)
+"""
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
+
+import piexif
+from PIL import Image
 
 from ._inference import Orientation
 
 
-def _check_tool(name: str) -> bool:
-    return shutil.which(name) is not None
-
-
-def rotate_exiftool(image_path: Path, orientation: Orientation) -> bool:
-    """Set EXIF Orientation tag using exiftool. Truly lossless."""
+def rotate_exif(image_path: Path, orientation: Orientation) -> bool:
+    """Set EXIF Orientation tag. Truly lossless — only touches metadata bytes."""
     if orientation == Orientation.CORRECT:
         return False
 
-    if not _check_tool("exiftool"):
-        raise RuntimeError("exiftool not found. Install with: brew install exiftool")
+    try:
+        exif_dict = piexif.load(str(image_path))
+    except piexif.InvalidImageDataError:
+        exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}}
 
-    result = subprocess.run(
-        [
-            "exiftool",
-            "-overwrite_original",
-            f"-Orientation={orientation.exif_orientation}",
-            "-n",
-            str(image_path),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    return result.returncode == 0
+    exif_dict["0th"][piexif.ImageIFD.Orientation] = orientation.exif_orientation
+    piexif.insert(piexif.dump(exif_dict), str(image_path))
+    return True
 
 
-def rotate_jpegtran(image_path: Path, orientation: Orientation) -> bool:
-    """Lossless DCT rotation using jpegtran. Modifies pixel data."""
+def rotate_transpose(image_path: Path, orientation: Orientation) -> bool:
+    """Rotate pixels using Pillow. Re-encodes JPEG but requires no external tools."""
     if orientation == Orientation.CORRECT:
         return False
 
-    if not _check_tool("jpegtran"):
-        raise RuntimeError("jpegtran not found. Install with: brew install libjpeg-turbo")
-
-    rotation_flag = {
-        Orientation.CW_90: "90",
-        Orientation.CW_180: "180",
-        Orientation.CCW_90: "270",
+    transpose_op = {
+        Orientation.CW_90: Image.Transpose.ROTATE_270,
+        Orientation.CW_180: Image.Transpose.ROTATE_180,
+        Orientation.CCW_90: Image.Transpose.ROTATE_90,
     }[orientation]
 
-    tmp_path = image_path.with_suffix(".tmp.jpg")
-
-    result = subprocess.run(
-        [
-            "jpegtran",
-            "-rotate", rotation_flag,
-            "-copy", "all",
-            "-outfile", str(tmp_path),
-            str(image_path),
-        ],
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode == 0 and tmp_path.exists():
-        tmp_path.replace(image_path)
-        return True
-    else:
-        if tmp_path.exists():
-            tmp_path.unlink()
-        return False
+    img = Image.open(image_path)
+    rotated = img.transpose(transpose_op)
+    rotated.save(image_path, quality=95)
+    return True
 
 
 def apply_rotation(
     image_path: Path,
     orientation: Orientation,
-    method: str = "exiftool",
+    method: str = "exif",
 ) -> bool:
-    """Apply lossless rotation using the specified method."""
-    if method == "exiftool":
-        return rotate_exiftool(image_path, orientation)
-    elif method == "jpegtran":
-        return rotate_jpegtran(image_path, orientation)
+    """Apply rotation using the specified method."""
+    if method == "exif":
+        return rotate_exif(image_path, orientation)
+    elif method == "transpose":
+        return rotate_transpose(image_path, orientation)
     else:
-        raise ValueError(f"Unknown rotation method: {method}")
+        raise ValueError(f"Unknown rotation method: {method!r}. Use 'exif' or 'transpose'.")

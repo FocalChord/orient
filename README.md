@@ -28,9 +28,9 @@ results = orient.detect(["a.jpg", "b.jpg"])
 from PIL import Image
 result = orient.detect(Image.open("photo.jpg"))
 
-# Detect + apply lossless rotation
-orient.fix("photo.jpg")
-orient.fix("photo.jpg", method="jpegtran")
+# Detect + fix orientation
+orient.fix("photo.jpg")                       # set EXIF tag (default, lossless)
+orient.fix("photo.jpg", method="transpose")   # rotate pixels via Pillow
 orient.fix(["a.jpg", "b.jpg"])
 ```
 
@@ -42,8 +42,8 @@ Model weights (~990 MB) are automatically downloaded from [Hugging Face](https:/
 
 ## Rotation methods
 
-- **exiftool** (default) - Sets the EXIF Orientation tag. Truly lossless. Requires `exiftool`.
-- **jpegtran** - Lossless DCT rotation. Requires `jpegtran` (from libjpeg-turbo).
+- **exif** (default) — Sets the EXIF Orientation tag via piexif. Truly lossless (metadata only). No external tools needed.
+- **transpose** — Rotates pixels using Pillow. Re-encodes JPEG but works everywhere. No external tools needed.
 
 ## See also
 

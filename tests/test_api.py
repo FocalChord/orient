@@ -113,7 +113,7 @@ def test_fix_applies_rotation(mock_get_model, mock_apply, tmp_path):
 
     result = orient.fix(str(path))
     assert result.needs_rotation
-    mock_apply.assert_called_once_with(path, Orientation.CW_90, "exiftool")
+    mock_apply.assert_called_once_with(path, Orientation.CW_90, "exif")
 
 
 @patch("orient.apply_rotation")
@@ -131,7 +131,7 @@ def test_fix_skips_correct(mock_get_model, mock_apply, tmp_path):
 
 @patch("orient.apply_rotation")
 @patch("orient._inference.get_model")
-def test_fix_jpegtran_method(mock_get_model, mock_apply, tmp_path):
+def test_fix_transpose_method(mock_get_model, mock_apply, tmp_path):
     mock_get_model.return_value = _mock_model_90()
     mock_apply.return_value = True
 
@@ -139,8 +139,8 @@ def test_fix_jpegtran_method(mock_get_model, mock_apply, tmp_path):
     path = tmp_path / "test.jpg"
     img.save(path)
 
-    result = orient.fix(str(path), method="jpegtran")
-    mock_apply.assert_called_once_with(path, Orientation.CW_90, "jpegtran")
+    result = orient.fix(str(path), method="transpose")
+    mock_apply.assert_called_once_with(path, Orientation.CW_90, "transpose")
 
 
 @patch("orient.apply_rotation")

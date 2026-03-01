@@ -29,12 +29,16 @@ def detect(
 def fix(
     input: Union[str, Path, list[str], list[Path]],
     *,
-    method: str = "exiftool",
+    method: str = "exif",
 ) -> Union[Result, list[Result]]:
-    """Detect orientation and apply lossless rotation to fix it.
+    """Detect orientation and apply rotation to fix it.
 
     Accepts a file path (str/Path) or a list of paths.
     Returns the detection Result(s) so you can inspect what happened.
+
+    Methods:
+      "exif"      — Set EXIF Orientation tag (metadata only, truly lossless)
+      "transpose" — Rotate pixels via Pillow (re-encodes JPEG)
     """
     if isinstance(input, list):
         paths = [Path(p) for p in input]
