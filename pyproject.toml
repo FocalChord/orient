@@ -1,0 +1,18 @@
+[project]
+name = "orient"
+version = "0.1.0"
+description = "Detect and fix orientation of images using deep learning"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "tensorflow>=2.16",
+    "transformers>=4.30,<5",
+    "tf-keras>=2.16",
+    "numpy>=1.23",
+    "Pillow>=10.0",
+    "huggingface-hub>=0.20",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.7,<0.11.0"]
+build-backend = "uv_build"
