@@ -24,6 +24,14 @@ result.is_correct       # False
 # Batch detection
 results = orient.detect(["a.jpg", "b.jpg"])
 
+# Folder detection — finds all JPEGs recursively
+results = orient.detect("photos/")
+for r in results:
+    print(f"{r.path.name}: {r.orientation.label}")
+
+# Folder options
+orient.detect("photos/", batch_size=16, recursive=False)
+
 # PIL Image input
 from PIL import Image
 result = orient.detect(Image.open("photo.jpg"))
@@ -32,6 +40,9 @@ result = orient.detect(Image.open("photo.jpg"))
 orient.fix("photo.jpg")                       # set EXIF tag (default, lossless)
 orient.fix("photo.jpg", method="transpose")   # rotate pixels via Pillow
 orient.fix(["a.jpg", "b.jpg"])
+
+# Fix an entire folder
+orient.fix("photos/")
 ```
 
 ## How it works

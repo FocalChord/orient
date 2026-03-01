@@ -45,6 +45,7 @@ def test_detect_single_path(mock_get_model, tmp_path):
     result = orient.detect(str(path))
     assert isinstance(result, Result)
     assert result.orientation == Orientation.CORRECT
+    assert result.path == path
 
 
 @patch("orient._inference.get_model")
@@ -66,6 +67,7 @@ def test_detect_pil_image(mock_get_model):
     result = orient.detect(img)
     assert isinstance(result, Result)
     assert result.is_correct
+    assert result.path is None
 
 
 @patch("orient._inference.get_model")
@@ -164,3 +166,113 @@ def test_fix_batch(mock_get_model, mock_apply, tmp_path):
     assert len(results) == 2
     # Only the rotated one should trigger apply_rotation
     assert mock_apply.call_count == 1
+
+
+# --- Directory tests ---
+
+
+def _save_jpegs(directory, count=3):
+    """Save test JPEGs into a directory, return sorted paths."""
+    paths = []
+    for i in range(count):
+        p = directory / f"img_{i:02d}.jpg"
+        _make_image().save(p)
+        paths.append(p)
+    return paths
+
+
+@patch("orient._inference.get_model")
+def test_detect_directory(mock_get_model, tmp_path):
+    model = MagicMock()
+    model.predict.return_value = np.array([[0.5], [0.5], [0.5]])
+    mock_get_model.return_value = model
+    _save_jpegs(tmp_path, count=3)
+
+    results = orient.detect(str(tmp_path))
+    assert isinstance(results, list)
+    assert len(results) == 3
+    assert all(r.path is not None for r in results)
+
+
+@patch("orient._inference.get_model")
+def test_detect_directory_pathlib(mock_get_model, tmp_path):
+    model = MagicMock()
+    model.predict.return_value = np.array([[0.5], [0.5]])
+    mock_get_model.return_value = model
+    _save_jpegs(tmp_path, count=2)
+
+    results = orient.detect(tmp_path)
+    assert len(results) == 2
+
+
+@patch("orient._inference.get_model")
+def test_detect_directory_recursive(mock_get_model, tmp_path):
+    model = MagicMock()
+    model.predict.return_value = np.array([[0.5], [0.5]])
+    mock_get_model.return_value = model
+
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    _make_image().save(tmp_path / "top.jpg")
+    _make_image().save(sub / "deep.jpg")
+
+    results = orient.detect(tmp_path, recursive=True)
+    assert len(results) == 2
+
+
+@patch("orient._inference.get_model")
+def test_detect_directory_non_recursive(mock_get_model, tmp_path):
+    model = MagicMock()
+    model.predict.return_value = np.array([[0.5]])
+    mock_get_model.return_value = model
+
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    _make_image().save(tmp_path / "top.jpg")
+    _make_image().save(sub / "deep.jpg")
+
+    results = orient.detect(tmp_path, recursive=False)
+    assert len(results) == 1
+
+
+@patch("orient._inference.get_model")
+def test_detect_directory_empty(mock_get_model, tmp_path):
+    mock_get_model.return_value = _mock_model()
+    results = orient.detect(tmp_path)
+    assert results == []
+
+
+@patch("orient.apply_rotation")
+@patch("orient._inference.get_model")
+def test_fix_directory(mock_get_model, mock_apply, tmp_path):
+    model = MagicMock()
+    model.predict.side_effect = [
+        np.array([[0.5], [89.0]]),          # batch: first correct, second ~90°
+        np.array([[2.0], [175.0]]),         # verification for 89°
+    ]
+    mock_get_model.return_value = model
+    mock_apply.return_value = True
+    _save_jpegs(tmp_path, count=2)
+
+    results = orient.fix(str(tmp_path))
+    assert len(results) == 2
+    assert mock_apply.call_count == 1
+
+
+@patch("orient._inference.get_model")
+def test_fix_directory_empty(mock_get_model, tmp_path):
+    mock_get_model.return_value = _mock_model()
+    results = orient.fix(tmp_path)
+    assert results == []
+
+
+@patch("orient._inference.get_model")
+def test_detect_batch_sets_path(mock_get_model, tmp_path):
+    model = MagicMock()
+    model.predict.return_value = np.array([[0.5], [0.5]])
+    mock_get_model.return_value = model
+
+    paths = _save_jpegs(tmp_path, count=2)
+    results = orient.detect([str(p) for p in paths])
+    for r, expected in zip(results, paths):
+        assert r.path == expected

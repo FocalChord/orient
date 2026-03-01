@@ -1,5 +1,7 @@
 """Tests for orientation types and angle mapping."""
 
+from pathlib import Path
+
 import pytest
 
 from orient._inference import Orientation, Result, _angle_to_orientation
@@ -42,12 +44,27 @@ class TestResult:
         assert r.needs_rotation is True
         assert r.is_correct is False
 
-    def test_repr(self):
+    def test_path_default_none(self):
+        r = Result(orientation=Orientation.CORRECT, confidence=0.95, angle=1.2)
+        assert r.path is None
+
+    def test_path_populated(self):
+        r = Result(orientation=Orientation.CW_90, confidence=0.90, angle=88.5, path=Path("photo.jpg"))
+        assert r.path == Path("photo.jpg")
+
+    def test_repr_without_path(self):
         r = Result(orientation=Orientation.CW_90, confidence=0.93, angle=82.4)
         s = repr(r)
         assert "CW_90" in s
         assert "0.93" in s
         assert "82.4" in s
+        assert "path" not in s
+
+    def test_repr_with_path(self):
+        r = Result(orientation=Orientation.CW_90, confidence=0.93, angle=82.4, path=Path("photo.jpg"))
+        s = repr(r)
+        assert "CW_90" in s
+        assert "photo.jpg" in s
 
 
 class TestAngleToOrientation:

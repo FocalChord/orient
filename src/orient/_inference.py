@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -12,6 +14,8 @@ from PIL import Image
 
 from ._model import get_model
 from ._preprocess import preprocess_path, preprocess_pil
+
+_MAX_WORKERS = min(8, os.cpu_count() or 4)
 
 
 class Orientation(IntEnum):
@@ -43,6 +47,7 @@ class Result:
     orientation: Orientation
     confidence: float
     angle: float
+    path: Path | None = None
 
     @property
     def needs_rotation(self) -> bool:
@@ -53,11 +58,14 @@ class Result:
         return self.orientation == Orientation.CORRECT
 
     def __repr__(self) -> str:
-        return (
-            f"Result(orientation={self.orientation.name}, "
-            f"confidence={self.confidence:.2f}, "
-            f"angle={self.angle:.1f})"
-        )
+        parts = [
+            f"orientation={self.orientation.name}",
+            f"confidence={self.confidence:.2f}",
+            f"angle={self.angle:.1f}",
+        ]
+        if self.path is not None:
+            parts.append(f"path={self.path}")
+        return f"Result({', '.join(parts)})"
 
 
 def _angle_to_orientation(angle: float) -> tuple[Orientation, float]:
@@ -102,8 +110,10 @@ def detect_single(image: Union[str, Path, Image.Image]) -> Result:
 
     if isinstance(image, Image.Image):
         arr = preprocess_pil(image)
+        image_path = None
     else:
         arr = preprocess_path(str(image))
+        image_path = Path(image)
 
     batch = np.expand_dims(arr, 0)
     pred = model.predict(batch, verbose=0)[0][0]
@@ -113,26 +123,42 @@ def detect_single(image: Union[str, Path, Image.Image]) -> Result:
     if orientation in (Orientation.CW_90, Orientation.CCW_90):
         orientation = _verify_direction(model, image)
 
-    return Result(orientation=orientation, confidence=confidence, angle=float(pred))
+    return Result(orientation=orientation, confidence=confidence, angle=float(pred), path=image_path)
 
 
-def detect_batch(image_paths: list[Union[str, Path]]) -> list[Result]:
-    """Run OAD model on a batch of images with direction verification."""
+def detect_batch(
+    image_paths: list[Union[str, Path]],
+    *,
+    batch_size: int = 32,
+) -> list[Result]:
+    """Run OAD model on a batch of images with direction verification.
+
+    Processes in chunks of *batch_size* to cap peak memory. Preprocessing
+    within each chunk is parallelised across threads (Pillow releases the GIL).
+    """
     model = get_model()
-    batch = np.stack([preprocess_path(str(p)) for p in image_paths])
-    preds = model.predict(batch, verbose=0).flatten()
+    results: list[Result] = []
 
-    results = []
-    for image_path, pred in zip(image_paths, preds):
-        orientation, confidence = _angle_to_orientation(pred)
+    for start in range(0, len(image_paths), batch_size):
+        chunk_paths = image_paths[start : start + batch_size]
 
-        if orientation in (Orientation.CW_90, Orientation.CCW_90):
-            orientation = _verify_direction(model, image_path)
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            arrays = list(pool.map(lambda p: preprocess_path(str(p)), chunk_paths))
 
-        results.append(Result(
-            orientation=orientation,
-            confidence=confidence,
-            angle=float(pred),
-        ))
+        batch = np.stack(arrays)
+        preds = model.predict(batch, verbose=0).flatten()
+
+        for image_path, pred in zip(chunk_paths, preds):
+            orientation, confidence = _angle_to_orientation(pred)
+
+            if orientation in (Orientation.CW_90, Orientation.CCW_90):
+                orientation = _verify_direction(model, image_path)
+
+            results.append(Result(
+                orientation=orientation,
+                confidence=confidence,
+                angle=float(pred),
+                path=Path(image_path),
+            ))
 
     return results
