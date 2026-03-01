@@ -15,11 +15,11 @@ def _check_tool(name: str) -> bool:
 
 def rotate_exiftool(image_path: Path, orientation: Orientation) -> bool:
     """Set EXIF Orientation tag using exiftool. Truly lossless."""
-    if not _check_tool("exiftool"):
-        raise RuntimeError("exiftool not found. Install with: brew install exiftool")
-
     if orientation == Orientation.CORRECT:
         return False
+
+    if not _check_tool("exiftool"):
+        raise RuntimeError("exiftool not found. Install with: brew install exiftool")
 
     result = subprocess.run(
         [
@@ -37,11 +37,11 @@ def rotate_exiftool(image_path: Path, orientation: Orientation) -> bool:
 
 def rotate_jpegtran(image_path: Path, orientation: Orientation) -> bool:
     """Lossless DCT rotation using jpegtran. Modifies pixel data."""
-    if not _check_tool("jpegtran"):
-        raise RuntimeError("jpegtran not found. Install with: brew install libjpeg-turbo")
-
     if orientation == Orientation.CORRECT:
         return False
+
+    if not _check_tool("jpegtran"):
+        raise RuntimeError("jpegtran not found. Install with: brew install libjpeg-turbo")
 
     rotation_flag = {
         Orientation.CW_90: "90",
