@@ -5,7 +5,7 @@ Detect and fix image orientation using a deep learning model ([Deep-OAD](https:/
 ## Install
 
 ```bash
-pip install orient
+pip install orient-img
 ```
 
 ## Usage
