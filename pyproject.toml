@@ -1,5 +1,5 @@
 [project]
-name = "orient"
+name = "orient-img"
 version = "0.2.0"
 description = "Detect and fix orientation of images using deep learning"
 readme = "README.md"
